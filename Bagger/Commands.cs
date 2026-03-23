@@ -37,7 +37,11 @@ internal static class Commands
         player.SendInfoMessage("/bag list - View defeated bosses");
         player.SendInfoMessage("/bag all - Claim all available boss bags");
         player.SendInfoMessage("/bag status - View your claim status");
+        
+        if (player.HasPermission("bagger.admin"))
+        {
         player.SendInfoMessage("/bag reset - Reset all claim data (admin)");
+        }
     }
 
     private static void ListDefeatedBosses(TSPlayer player)
