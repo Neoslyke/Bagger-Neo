@@ -1,323 +1,216 @@
-﻿using TShockAPI;
-using System.Data;
+﻿using Microsoft.Xna.Framework;
 using Terraria.ID;
-using static Bagger.Bagger;
-using Microsoft.Xna.Framework;
+using TShockAPI;
 
 namespace Bagger;
 
-internal class Commands
+internal static class Commands
 {
-    #region 获取礼包的指令方法
-    public static void GetBagsCmd(CommandArgs args)
+    public static void HandleCommand(CommandArgs args)
     {
-        if (args.Parameters.Count == 0)
+        var subcmd = args.Parameters.Count > 0 ? args.Parameters[0].ToLower() : "help";
+
+        switch (subcmd)
         {
-            help(args.Player);
+            case "list":
+                ListDefeatedBosses(args.Player);
+                break;
+            case "reset":
+                ResetProgress(args.Player);
+                break;
+            case "all":
+            case "claim":
+                ClaimAllBags(args.Player);
+                break;
+            case "status":
+                ShowStatus(args.Player);
+                break;
+            default:
+                ShowHelp(args.Player);
+                break;
+        }
+    }
+
+    private static void ShowHelp(TSPlayer player)
+    {
+        player.SendMessage("[Bagger] Commands:", Color.GreenYellow);
+        player.SendInfoMessage("/bag list - View defeated bosses");
+        player.SendInfoMessage("/bag all - Claim all available boss bags");
+        player.SendInfoMessage("/bag status - View your claim status");
+        player.SendInfoMessage("/bag reset - Reset all claim data (admin)");
+    }
+
+    private static void ListDefeatedBosses(TSPlayer player)
+    {
+        if (Bagger.Config.DownedBosses.Count == 0)
+        {
+            player.SendWarningMessage("[Bagger] No bosses have been defeated yet.");
             return;
         }
 
-        if (args.Parameters.Count == 1 && args.Parameters[0].ToLower() == "list")
+        var bossNames = Bagger.Config.DownedBosses
+            .Select(id => TShock.Utils.GetNPCById(id)?.FullName ?? $"Unknown ({id})")
+            .Distinct();
+
+        player.SendInfoMessage("[Bagger] Defeated Bosses:");
+        player.SendSuccessMessage(string.Join(", ", bossNames));
+    }
+
+    private static void ShowStatus(TSPlayer player)
+    {
+        if (!Bagger.DB.IsPlayerInDb(player.Name))
         {
-            Lists(args.Player);
+            player.SendInfoMessage("[Bagger] You have not claimed any boss bags yet.");
+            player.SendInfoMessage($"Available to claim: {GetUnclaimedBossCount(0)} boss(es)");
             return;
         }
 
-        if (args.Parameters.Count == 1 && (args.Parameters[0].ToLower() == "重置" || args.Parameters[0].ToLower() == "reset"))
-        {
-            Reset(args.Player);
-            return;
-        }
+        var mask = Bagger.DB.GetClaimedBossMask(player.Name);
+        var claimed = new List<string>();
+        var available = new List<string>();
 
-        if (args.Parameters.Count == 1 && (args.Parameters[0].ToLower() == "领取全部" || args.Parameters[0].ToLower() == "all"))
+        foreach (var (configKey, bossIds) in BossHelper.ConfigKeyToBossIds)
         {
-            int claimMask = 0;
-            if (DB.IsPlayerInDb(args.Player.Name))
-            {
-                claimMask = DB.GetClaimedBossMask(args.Player.Name);
-                SendMessage2(args.Player);
-            }
+            var primaryBossId = bossIds[0];
+            var bossName = TShock.Utils.GetNPCById(primaryBossId)?.FullName ?? configKey;
+
+            if (!Bagger.Config.DownedBosses.Intersect(bossIds).Any())
+                continue;
+
+            if (BossHelper.HasClaimedBoss(mask, primaryBossId))
+                claimed.Add(bossName);
             else
-            {
-                DB.InsertPlayer(args.Player.Name);
-                SendMessage(args.Player);
-            }
-
-            if ((claimMask & 1) != 1 && Config.DownedBosses.Contains(NPCID.KingSlime))
-            {
-                claimMask |= 1;
-                foreach (var itemData in Config.KingSlimeDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 2) != 2 && Config.DownedBosses.Contains(NPCID.EyeofCthulhu))
-            {
-                claimMask |= 2;
-                foreach (var itemData in Config.EyeOFCthulhuDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 4) != 4 && Config.DownedBosses.Contains(NPCID.EaterofWorldsHead))
-            {
-                claimMask |= 4;
-                foreach (var itemData in Config.EaterOfWorldsDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 8) != 8 && Config.DownedBosses.Contains(NPCID.BrainofCthulhu))
-            {
-                claimMask |= 8;
-                foreach (var itemData in Config.BrainOfCthulhuDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 16) != 16 && Config.DownedBosses.Contains(NPCID.QueenBee))
-            {
-                claimMask |= 16;
-                foreach (var itemData in Config.QueenBeeDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 32) != 32 && Config.DownedBosses.Contains(NPCID.SkeletronHead))
-            {
-                claimMask |= 32;
-                foreach (var itemData in Config.SkeletronDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 64) != 64 && Config.DownedBosses.Contains(NPCID.Deerclops))
-            {
-                claimMask |= 64;
-                foreach (var itemData in Config.Deerclops)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 128) != 128 && Config.DownedBosses.Contains(NPCID.WallofFlesh))
-            {
-                claimMask |= 128;
-                foreach (var itemData in Config.WallOfFleshDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 256) != 256 && Config.DownedBosses.Contains(NPCID.QueenSlimeBoss))
-            {
-                claimMask |= 256;
-                foreach (var itemData in Config.QueenSlimeDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 512) != 512 && Config.DownedBosses.Contains(NPCID.TheDestroyer))
-            {
-                claimMask |= 512;
-                foreach (var itemData in Config.TheDestroyerDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 1024) != 1024 && Config.DownedBosses.Contains(NPCID.Retinazer) && Config.DownedBosses.Contains(NPCID.Spazmatism))
-            {
-                claimMask |= 1024;
-                foreach (var itemData in Config.TheTwinsDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 2048) != 2048 && Config.DownedBosses.Contains(NPCID.SkeletronPrime))
-            {
-                claimMask |= 2048;
-                foreach (var itemData in Config.SkeletronPrimeDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 4096) != 4096 && Config.DownedBosses.Contains(NPCID.Plantera))
-            {
-                claimMask |= 4096;
-                foreach (var itemData in Config.PlanteraDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 8192) != 8192 && Config.DownedBosses.Contains(NPCID.Golem))
-            {
-                claimMask |= 8192;
-                foreach (var itemData in Config.GolemDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 16384) != 16384 && Config.DownedBosses.Contains(NPCID.DukeFishron))
-            {
-                claimMask |= 16384;
-                foreach (var itemData in Config.DukeFishronDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 32768) != 32768 && Config.DownedBosses.Contains(NPCID.HallowBoss))
-            {
-                claimMask |= 32768;
-                foreach (var itemData in Config.EmpressOfLight)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 65536) != 65536 && Config.DownedBosses.Contains(NPCID.CultistBoss))
-            {
-                claimMask |= 65536;
-                foreach (var itemData in Config.LunaticCultistDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 131072) != 131072 && Config.DownedBosses.Contains(NPCID.DD2Betsy))
-            {
-                claimMask |= 131072;
-                foreach (var itemData in Config.BetsyDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-
-            if ((claimMask & 262144) != 262144 && Config.DownedBosses.Contains(NPCID.MoonLordCore))
-            {
-                claimMask |= 262144;
-                foreach (var itemData in Config.MoonlordDrop)
-                {
-                    int id = itemData.ID;
-                    int stack = itemData.Stack;
-                    args.Player.GiveItem(id, stack);
-                }
-            }
-            DB.SavePlayer(args.Player.Name, claimMask);
+                available.Add(bossName);
         }
-    }
-    #endregion
 
-    #region 指令辅助方法
-    private static void help(TSPlayer plr)
-    {
-        var NpcDeadInfo = string.Join(", ", Config.DownedBosses.Select(x => TShock.Utils.GetNPCById(x)?.FullName));
-        if (plr == null) return;
+        player.SendInfoMessage("[Bagger] Your Status:");
+        
+        if (claimed.Count > 0)
+            player.SendMessage($"[c/FF5F59:Claimed/Participated:] {string.Join(", ", claimed)}", Color.White);
+        
+        if (available.Count > 0)
+            player.SendMessage($"[c/7CFC00:Available to claim:] {string.Join(", ", available)}", Color.White);
         else
-        {
-            plr.SendMessage("【Bagger】主命令可用 /pk 或 /礼包\n" +
-             "/礼包 或 /pk — 查看Bagger指令菜单\n" +
-             "/pk list — 查看已击败BOSS\n" +
-             "/pk all 或 领取全部 — 领取所有礼包(打过不准领)\n" +
-             "/pk reset 或 重置 — 重置礼包领取状态\n" +
-             "/reload — 重载礼包配置文件", Color.GreenYellow);
-        }
+            player.SendSuccessMessage("You have claimed all available boss bags!");
     }
 
-    private static void Lists(TSPlayer plr)
+    private static void ClaimAllBags(TSPlayer player)
     {
-        var NpcDeadInfo = string.Join(", ", Config.DownedBosses.Select(x => TShock.Utils.GetNPCById(x)?.FullName));
-        if (plr == null) return;
-        else
+        if (Bagger.Config.DownedBosses.Count == 0)
         {
-            plr.SendInfoMessage("【Bagger】已击败Boss如下：\n" +
-                $"[c/FDFEAF:{NpcDeadInfo}]\n");
-        }
-    }
-
-    private static void Reset(TSPlayer plr)
-    {
-        if (!plr.HasPermission("bagger.admin"))
-        {
-            plr.SendErrorMessage("你没有权限重置[Bagger]进度礼包");
+            player.SendWarningMessage("[Bagger] No bosses have been defeated yet.");
             return;
         }
-        else if (DB.ClearData())
+
+        var mask = Bagger.DB.IsPlayerInDb(player.Name) 
+            ? Bagger.DB.GetClaimedBossMask(player.Name) 
+            : 0;
+
+        var claimedCount = 0;
+        var config = Bagger.Config;
+
+        // Process each boss reward
+        var bossRewards = new Dictionary<string, (int[] bossIds, List<Configuration.ItemData> items)>
         {
-            Config.DownedBosses.Clear();
-            Config.Write();
-            plr.SendSuccessMessage("已成功重置[Bagger]进度礼包");
+            { "King Slime", (new[] { NPCID.KingSlime }, config.KingSlimeDrop) },
+            { "Eye of Cthulhu", (new[] { NPCID.EyeofCthulhu }, config.EyeOfCthulhuDrop) },
+            { "Eater of Worlds", (new[] { NPCID.EaterofWorldsHead }, config.EaterOfWorldsDrop) },
+            { "Brain of Cthulhu", (new[] { NPCID.BrainofCthulhu }, config.BrainOfCthulhuDrop) },
+            { "Queen Bee", (new[] { NPCID.QueenBee }, config.QueenBeeDrop) },
+            { "Skeletron", (new[] { NPCID.SkeletronHead }, config.SkeletronDrop) },
+            { "Deerclops", (new[] { NPCID.Deerclops }, config.DeerclopsDrop) },
+            { "Wall of Flesh", (new[] { NPCID.WallofFlesh }, config.WallOfFleshDrop) },
+            { "Queen Slime", (new[] { NPCID.QueenSlimeBoss }, config.QueenSlimeDrop) },
+            { "The Destroyer", (new[] { NPCID.TheDestroyer }, config.TheDestroyerDrop) },
+            { "The Twins", (new[] { NPCID.Retinazer, NPCID.Spazmatism }, config.TheTwinsDrop) },
+            { "Skeletron Prime", (new[] { NPCID.SkeletronPrime }, config.SkeletronPrimeDrop) },
+            { "Plantera", (new[] { NPCID.Plantera }, config.PlanteraDrop) },
+            { "Golem", (new[] { NPCID.Golem }, config.GolemDrop) },
+            { "Duke Fishron", (new[] { NPCID.DukeFishron }, config.DukeFishronDrop) },
+            { "Empress of Light", (new[] { NPCID.HallowBoss }, config.EmpressOfLightDrop) },
+            { "Lunatic Cultist", (new[] { NPCID.CultistBoss }, config.LunaticCultistDrop) },
+            { "Betsy", (new[] { NPCID.DD2Betsy }, config.BetsyDrop) },
+            { "Moon Lord", (new[] { NPCID.MoonLordCore }, config.MoonLordDrop) }
+        };
+
+        foreach (var (bossName, (bossIds, items)) in bossRewards)
+        {
+            var primaryBossId = bossIds[0];
+            var bossMask = BossHelper.GetBossMask(primaryBossId);
+
+            // Skip if already claimed
+            if ((mask & bossMask) == bossMask)
+                continue;
+
+            // Check if boss is defeated (for Twins, check both)
+            var isDefeated = bossIds.Length > 1 
+                ? bossIds.All(id => config.DownedBosses.Contains(id))
+                : config.DownedBosses.Contains(primaryBossId);
+
+            if (!isDefeated)
+                continue;
+
+            // Give items
+            foreach (var item in items)
+            {
+                player.GiveItem(item.ID, item.Stack);
+            }
+
+            mask |= bossMask;
+            claimedCount++;
+            
+            player.SendSuccessMessage($"[Bagger] Claimed {bossName} rewards!");
+        }
+
+        // Save to database
+        if (Bagger.DB.IsPlayerInDb(player.Name))
+            Bagger.DB.SavePlayer(player.Name, mask);
+        else
+            Bagger.DB.InsertPlayer(player.Name, mask);
+
+        if (claimedCount == 0)
+        {
+            player.SendWarningMessage("[Bagger] No new boss bags available to claim.");
+            player.SendInfoMessage("You may have already claimed them or participated in the fights.");
+        }
+        else
+        {
+            player.SendSuccessMessage($"[Bagger] Successfully claimed {claimedCount} boss bag(s)!");
         }
     }
 
-    private static void SendMessage(TSPlayer plr)
+    private static void ResetProgress(TSPlayer player)
     {
-        var NpcDeadInfo = string.Join(", ", Config.DownedBosses.Select(x => TShock.Utils.GetNPCById(x)?.FullName));
-        if (!string.IsNullOrEmpty(NpcDeadInfo))
-            plr.SendMessage($"【Bagger】" +
-            $"你[c/AFE0F4:未参与过]BOSS战，可领取礼包以下：\n" +
-            $"[c/FDFEAF:{NpcDeadInfo}]", Color.GreenYellow);
+        if (!player.HasPermission("bagger.admin"))
+        {
+            player.SendErrorMessage("You don't have permission to reset Bagger progress.");
+            return;
+        }
+
+        if (Bagger.DB.ClearData())
+        {
+            Bagger.Config.DownedBosses.Clear();
+            Bagger.Config.Save();
+            player.SendSuccessMessage("[Bagger] All progress has been reset.");
+        }
         else
-            plr.SendMessage($"【Bagger】因未击败[c/FF908C:任何Boss],无法领取礼包", Color.GreenYellow);
+        {
+            player.SendErrorMessage("[Bagger] Failed to reset progress.");
+        }
     }
 
-    private static void SendMessage2(TSPlayer plr)
+    private static int GetUnclaimedBossCount(int mask)
     {
-        var NpcDeadInfo = string.Join(", ", Config.DownedBosses.Select(x => TShock.Utils.GetNPCById(x)?.FullName));
-        if (!string.IsNullOrEmpty(NpcDeadInfo))
-            plr.SendMessage($"【Bagger】\n" +
-            $"你[c/AFE0F4:已参与]Boss战 或 [c/FF5F59:已领取]\n" +
-            $"无法再领取礼包:[c/FDFEAF:{NpcDeadInfo}]", Color.GreenYellow);
-        else
-            plr.SendMessage($"【Bagger】因未击败[c/FF908C:任何Boss],无法领取礼包", Color.GreenYellow);
+        var count = 0;
+        foreach (var (_, bossIds) in BossHelper.ConfigKeyToBossIds)
+        {
+            var primaryBossId = bossIds[0];
+            if (Bagger.Config.DownedBosses.Contains(primaryBossId) && 
+                !BossHelper.HasClaimedBoss(mask, primaryBossId))
+            {
+                count++;
+            }
+        }
+        return count;
     }
-    #endregion
 }
