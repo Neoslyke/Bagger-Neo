@@ -10,10 +10,17 @@ public class DatabaseManager
 
     public DatabaseManager()
     {
-        var sqlCreator = new SqlTableCreator(TShock.DB, new SqliteQueryCreator());
-        sqlCreator.EnsureTableStructure(new SqlTable(TableName,
-            new SqlColumn("Name", MySqlDbType.VarChar, 50) { Primary = true, Unique = true },
-            new SqlColumn("ClaimedBossesMask", MySqlDbType.Int32) { DefaultValue = "0" }));
+        var sql = TShock.DB.GetSqlType() == SqlType.Sqlite
+            ? $@"CREATE TABLE IF NOT EXISTS {TableName} (
+                    Name TEXT PRIMARY KEY,
+                    ClaimedBossesMask INTEGER DEFAULT 0
+                )"
+            : $@"CREATE TABLE IF NOT EXISTS {TableName} (
+                    Name VARCHAR(50) PRIMARY KEY,
+                    ClaimedBossesMask INT DEFAULT 0
+                )";
+
+        TShock.DB.Query(sql);
     }
 
     public int GetClaimedBossMask(string name)

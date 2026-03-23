@@ -11,8 +11,8 @@ namespace Bagger;
 public class Bagger : TerrariaPlugin
 {
     public override string Name => "Bagger";
-    public override string Author => "Neoslyke, Soofa, 羽学";
-    public override Version Version => new(2, 1, 0);
+    public override Version Version => new(1, 5, 0);
+    public override string Author => "Soofa, 羽学, Neoslyke";
     public override string Description => "Allows players who missed boss fights to claim boss bags.";
 
     internal static DatabaseManager DB = null!;
@@ -29,7 +29,7 @@ public class Bagger : TerrariaPlugin
         ServerApi.Hooks.GamePostInitialize.Register(this, OnGamePostInitialize);
         ServerApi.Hooks.NpcKilled.Register(this, OnNpcKilled);
         
-        Commands.ChatCommands.Add(new Command("bagger.use", Commands.HandleCommand, "bag", "bagger")
+        TShockAPI.Commands.ChatCommands.Add(new Command("bagger.use", Commands.HandleCommand, "bag", "bagger")
         {
             HelpText = "Claim boss bags you missed."
         });
@@ -42,7 +42,7 @@ public class Bagger : TerrariaPlugin
             GeneralHooks.ReloadEvent -= OnReload;
             ServerApi.Hooks.GamePostInitialize.Deregister(this, OnGamePostInitialize);
             ServerApi.Hooks.NpcKilled.Deregister(this, OnNpcKilled);
-            Commands.ChatCommands.RemoveAll(c => c.Names.Contains("bag") || c.Names.Contains("bagger"));
+            TShockAPI.Commands.ChatCommands.RemoveAll(c => c.Names.Contains("bag") || c.Names.Contains("bagger"));
         }
         base.Dispose(disposing);
     }
@@ -59,9 +59,6 @@ public class Bagger : TerrariaPlugin
         Config.Save();
     }
 
-    /// <summary>
-    /// Syncs the downed bosses list with the world's progress.
-    /// </summary>
     private void SyncDownedBosses()
     {
         var bossChecks = new Dictionary<int, bool>
@@ -106,7 +103,6 @@ public class Bagger : TerrariaPlugin
 
         Config.DownedBosses.Add(npc.type);
         
-        // Handle Twins (both must be added)
         if (npc.type == NPCID.Retinazer && !Config.DownedBosses.Contains(NPCID.Spazmatism))
             Config.DownedBosses.Add(NPCID.Spazmatism);
         else if (npc.type == NPCID.Spazmatism && !Config.DownedBosses.Contains(NPCID.Retinazer))
@@ -114,7 +110,6 @@ public class Bagger : TerrariaPlugin
 
         Config.Save();
 
-        // Mark all online players as having participated
         foreach (var player in TShock.Players.Where(p => p?.Active == true))
         {
             var mask = DB.IsPlayerInDb(player.Name) 
@@ -130,9 +125,6 @@ public class Bagger : TerrariaPlugin
         }
     }
 
-    /// <summary>
-    /// Checks if the boss is fully unlocked in the bestiary.
-    /// </summary>
     private static bool IsBestiaryUnlocked(int npcId)
     {
         var entry = Main.BestiaryDB.FindEntryByNPCID(npcId);

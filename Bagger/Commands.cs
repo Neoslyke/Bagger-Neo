@@ -109,28 +109,27 @@ internal static class Commands
         var claimedCount = 0;
         var config = Bagger.Config;
 
-        // Process each boss reward
         var bossRewards = new Dictionary<string, (int[] bossIds, List<Configuration.ItemData> items)>
         {
-            { "King Slime", (new[] { NPCID.KingSlime }, config.KingSlimeDrop) },
-            { "Eye of Cthulhu", (new[] { NPCID.EyeofCthulhu }, config.EyeOfCthulhuDrop) },
-            { "Eater of Worlds", (new[] { NPCID.EaterofWorldsHead }, config.EaterOfWorldsDrop) },
-            { "Brain of Cthulhu", (new[] { NPCID.BrainofCthulhu }, config.BrainOfCthulhuDrop) },
-            { "Queen Bee", (new[] { NPCID.QueenBee }, config.QueenBeeDrop) },
-            { "Skeletron", (new[] { NPCID.SkeletronHead }, config.SkeletronDrop) },
-            { "Deerclops", (new[] { NPCID.Deerclops }, config.DeerclopsDrop) },
-            { "Wall of Flesh", (new[] { NPCID.WallofFlesh }, config.WallOfFleshDrop) },
-            { "Queen Slime", (new[] { NPCID.QueenSlimeBoss }, config.QueenSlimeDrop) },
-            { "The Destroyer", (new[] { NPCID.TheDestroyer }, config.TheDestroyerDrop) },
-            { "The Twins", (new[] { NPCID.Retinazer, NPCID.Spazmatism }, config.TheTwinsDrop) },
-            { "Skeletron Prime", (new[] { NPCID.SkeletronPrime }, config.SkeletronPrimeDrop) },
-            { "Plantera", (new[] { NPCID.Plantera }, config.PlanteraDrop) },
-            { "Golem", (new[] { NPCID.Golem }, config.GolemDrop) },
-            { "Duke Fishron", (new[] { NPCID.DukeFishron }, config.DukeFishronDrop) },
-            { "Empress of Light", (new[] { NPCID.HallowBoss }, config.EmpressOfLightDrop) },
-            { "Lunatic Cultist", (new[] { NPCID.CultistBoss }, config.LunaticCultistDrop) },
-            { "Betsy", (new[] { NPCID.DD2Betsy }, config.BetsyDrop) },
-            { "Moon Lord", (new[] { NPCID.MoonLordCore }, config.MoonLordDrop) }
+            { "King Slime", (new[] { (int)NPCID.KingSlime }, config.KingSlimeDrop) },
+            { "Eye of Cthulhu", (new[] { (int)NPCID.EyeofCthulhu }, config.EyeOfCthulhuDrop) },
+            { "Eater of Worlds", (new[] { (int)NPCID.EaterofWorldsHead }, config.EaterOfWorldsDrop) },
+            { "Brain of Cthulhu", (new[] { (int)NPCID.BrainofCthulhu }, config.BrainOfCthulhuDrop) },
+            { "Queen Bee", (new[] { (int)NPCID.QueenBee }, config.QueenBeeDrop) },
+            { "Skeletron", (new[] { (int)NPCID.SkeletronHead }, config.SkeletronDrop) },
+            { "Deerclops", (new[] { (int)NPCID.Deerclops }, config.DeerclopsDrop) },
+            { "Wall of Flesh", (new[] { (int)NPCID.WallofFlesh }, config.WallOfFleshDrop) },
+            { "Queen Slime", (new[] { (int)NPCID.QueenSlimeBoss }, config.QueenSlimeDrop) },
+            { "The Destroyer", (new[] { (int)NPCID.TheDestroyer }, config.TheDestroyerDrop) },
+            { "The Twins", (new[] { (int)NPCID.Retinazer, (int)NPCID.Spazmatism }, config.TheTwinsDrop) },
+            { "Skeletron Prime", (new[] { (int)NPCID.SkeletronPrime }, config.SkeletronPrimeDrop) },
+            { "Plantera", (new[] { (int)NPCID.Plantera }, config.PlanteraDrop) },
+            { "Golem", (new[] { (int)NPCID.Golem }, config.GolemDrop) },
+            { "Duke Fishron", (new[] { (int)NPCID.DukeFishron }, config.DukeFishronDrop) },
+            { "Empress of Light", (new[] { (int)NPCID.HallowBoss }, config.EmpressOfLightDrop) },
+            { "Lunatic Cultist", (new[] { (int)NPCID.CultistBoss }, config.LunaticCultistDrop) },
+            { "Betsy", (new[] { (int)NPCID.DD2Betsy }, config.BetsyDrop) },
+            { "Moon Lord", (new[] { (int)NPCID.MoonLordCore }, config.MoonLordDrop) }
         };
 
         foreach (var (bossName, (bossIds, items)) in bossRewards)
@@ -138,11 +137,9 @@ internal static class Commands
             var primaryBossId = bossIds[0];
             var bossMask = BossHelper.GetBossMask(primaryBossId);
 
-            // Skip if already claimed
             if ((mask & bossMask) == bossMask)
                 continue;
 
-            // Check if boss is defeated (for Twins, check both)
             var isDefeated = bossIds.Length > 1 
                 ? bossIds.All(id => config.DownedBosses.Contains(id))
                 : config.DownedBosses.Contains(primaryBossId);
@@ -150,7 +147,6 @@ internal static class Commands
             if (!isDefeated)
                 continue;
 
-            // Give items
             foreach (var item in items)
             {
                 player.GiveItem(item.ID, item.Stack);
@@ -162,7 +158,6 @@ internal static class Commands
             player.SendSuccessMessage($"[Bagger] Claimed {bossName} rewards!");
         }
 
-        // Save to database
         if (Bagger.DB.IsPlayerInDb(player.Name))
             Bagger.DB.SavePlayer(player.Name, mask);
         else
