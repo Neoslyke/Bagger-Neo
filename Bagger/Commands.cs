@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using Terraria;
 using Terraria.ID;
 using TShockAPI;
 
@@ -40,7 +41,7 @@ internal static class Commands
         
         if (player.HasPermission("bagger.admin"))
         {
-        player.SendInfoMessage("/bag reset - Reset all claim data (admin)");
+            player.SendInfoMessage("/bag reset - Reset all claim data (admin)");
         }
     }
 
@@ -98,6 +99,21 @@ internal static class Commands
             player.SendSuccessMessage("You have claimed all available boss bags!");
     }
 
+    private static int GetFreeInventorySlots(TSPlayer player)
+    {
+        int freeSlots = 0;
+        // Main inventory slots 0-49 (excluding hotbar would be 10-49, but we include all main inventory)
+        for (int i = 0; i < 50; i++)
+        {
+            var item = player.TPlayer.inventory[i];
+            if (item == null || item.IsAir || item.type == ItemID.None)
+            {
+                freeSlots++;
+            }
+        }
+        return freeSlots;
+    }
+
     private static void ClaimAllBags(TSPlayer player)
     {
         if (Bagger.Config.DownedBosses.Count == 0)
@@ -110,7 +126,6 @@ internal static class Commands
             ? Bagger.DB.GetClaimedBossMask(player.Name) 
             : 0;
 
-        var claimedCount = 0;
         var config = Bagger.Config;
 
         var bossRewards = new Dictionary<string, (int[] bossIds, List<Configuration.ItemData> items)>
@@ -136,14 +151,20 @@ internal static class Commands
             { "Moon Lord", (new[] { (int)NPCID.MoonLordCore }, config.MoonLordDrop) }
         };
 
+        // First pass: determine what can be claimed and count required slots
+        var toClaim = new List<(string bossName, int bossMask, List<Configuration.ItemData> items)>();
+        int totalItemSlots = 0;
+
         foreach (var (bossName, (bossIds, items)) in bossRewards)
         {
             var primaryBossId = bossIds[0];
             var bossMask = BossHelper.GetBossMask(primaryBossId);
 
+            // Skip if already claimed
             if ((mask & bossMask) == bossMask)
                 continue;
 
+            // Check if boss is defeated
             var isDefeated = bossIds.Length > 1 
                 ? bossIds.All(id => config.DownedBosses.Contains(id))
                 : config.DownedBosses.Contains(primaryBossId);
@@ -151,6 +172,36 @@ internal static class Commands
             if (!isDefeated)
                 continue;
 
+            // Skip if no items configured
+            if (items == null || items.Count == 0)
+                continue;
+
+            toClaim.Add((bossName, bossMask, items));
+            totalItemSlots += items.Count;
+        }
+
+        // Check if there's anything to claim
+        if (toClaim.Count == 0)
+        {
+            player.SendWarningMessage("[Bagger] No new boss bags available to claim.");
+            player.SendInfoMessage("You may have already claimed them or participated in the fights.");
+            return;
+        }
+
+        // Check inventory space
+        int freeSlots = GetFreeInventorySlots(player);
+        if (freeSlots < totalItemSlots)
+        {
+            player.SendErrorMessage($"[Bagger] Not enough inventory space!");
+            player.SendErrorMessage($"Required: {totalItemSlots} slot(s), Available: {freeSlots} slot(s)");
+            player.SendInfoMessage("Please free up inventory space and try again.");
+            return;
+        }
+
+        // Second pass: actually give items
+        var claimedCount = 0;
+        foreach (var (bossName, bossMask, items) in toClaim)
+        {
             foreach (var item in items)
             {
                 player.GiveItem(item.ID, item.Stack);
@@ -162,20 +213,13 @@ internal static class Commands
             player.SendSuccessMessage($"[Bagger] Claimed {bossName} rewards!");
         }
 
+        // Save to database
         if (Bagger.DB.IsPlayerInDb(player.Name))
             Bagger.DB.SavePlayer(player.Name, mask);
         else
             Bagger.DB.InsertPlayer(player.Name, mask);
 
-        if (claimedCount == 0)
-        {
-            player.SendWarningMessage("[Bagger] No new boss bags available to claim.");
-            player.SendInfoMessage("You may have already claimed them or participated in the fights.");
-        }
-        else
-        {
-            player.SendSuccessMessage($"[Bagger] Successfully claimed {claimedCount} boss bag(s)!");
-        }
+        player.SendSuccessMessage($"[Bagger] Successfully claimed {claimedCount} boss bag(s)!");
     }
 
     private static void ResetProgress(TSPlayer player)

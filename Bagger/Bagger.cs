@@ -11,18 +11,18 @@ namespace Bagger;
 public class Bagger : TerrariaPlugin
 {
     public override string Name => "Bagger";
-    public override Version Version => new(2, 1, 0);
     public override string Author => "Neoslyke, Soofa, 羽学";
+    public override Version Version => new(2, 1, 0);
     public override string Description => "Allows players who missed boss fights to claim boss bags.";
 
-    internal static DatabaseManager DB = null!;
+    internal static Database DB = null!;
     internal static Configuration Config = null!;
 
     public Bagger(Main game) : base(game) { }
 
     public override void Initialize()
     {
-        DB = new DatabaseManager();
+        DB = new Database();
         Config = Configuration.Load();
 
         GeneralHooks.ReloadEvent += OnReload;

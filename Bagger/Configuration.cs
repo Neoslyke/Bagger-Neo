@@ -8,9 +8,6 @@ public class Configuration
 {
     private static readonly string ConfigPath = Path.Combine(TShock.SavePath, "Bagger.json");
 
-    [JsonProperty("Description")]
-    public string Description { get; set; } = "Players who missed boss fights can claim boss bags. Permission: bagger.use (claim), bagger.admin (reset)";
-
     [JsonProperty("DownedBosses")]
     public List<int> DownedBosses { get; set; } = new();
 
