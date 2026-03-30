@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
 using TShockAPI;
 
 namespace Bagger;
@@ -34,53 +35,48 @@ public class Database
         cmd.CommandText = @"
             CREATE TABLE IF NOT EXISTS Players (
                 Name TEXT PRIMARY KEY,
-                ClaimedBossesMask INTEGER DEFAULT 0
+                ParticipatedCounts TEXT DEFAULT '{}'
             );
         ";
         cmd.ExecuteNonQuery();
     }
 
-    public int GetClaimedBossMask(string name)
+    public Dictionary<int, int> GetParticipatedCounts(string name)
     {
         using var conn = new SqliteConnection(_connString);
         conn.Open();
 
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT ClaimedBossesMask FROM Players WHERE Name = @name;";
+        cmd.CommandText = "SELECT ParticipatedCounts FROM Players WHERE Name = @name;";
         cmd.Parameters.AddWithValue("@name", name);
 
         var result = cmd.ExecuteScalar();
-        return result != null ? Convert.ToInt32(result) : 0;
+        if (result != null && result != DBNull.Value)
+        {
+            try
+            {
+                return JsonConvert.DeserializeObject<Dictionary<int, int>>(result.ToString()!) ?? new Dictionary<int, int>();
+            }
+            catch
+            {
+                return new Dictionary<int, int>();
+            }
+        }
+        return new Dictionary<int, int>();
     }
 
-    public bool InsertPlayer(string name, int mask = 0)
+    public bool SavePlayer(string name, Dictionary<int, int> participatedCounts)
     {
         using var conn = new SqliteConnection(_connString);
         conn.Open();
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = @"
-            INSERT OR IGNORE INTO Players (Name, ClaimedBossesMask) 
-            VALUES (@name, @mask);
+            INSERT OR REPLACE INTO Players (Name, ParticipatedCounts) 
+            VALUES (@name, @counts);
         ";
         cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@mask", mask);
-
-        return cmd.ExecuteNonQuery() > 0;
-    }
-
-    public bool SavePlayer(string name, int mask)
-    {
-        using var conn = new SqliteConnection(_connString);
-        conn.Open();
-
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = @"
-            INSERT OR REPLACE INTO Players (Name, ClaimedBossesMask) 
-            VALUES (@name, @mask);
-        ";
-        cmd.Parameters.AddWithValue("@name", name);
-        cmd.Parameters.AddWithValue("@mask", mask);
+        cmd.Parameters.AddWithValue("@counts", JsonConvert.SerializeObject(participatedCounts));
 
         return cmd.ExecuteNonQuery() > 0;
     }

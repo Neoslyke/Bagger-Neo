@@ -2,82 +2,94 @@ using Terraria.ID;
 
 namespace Bagger;
 
-/// <summary>
-/// Helper class for boss-related operations.
-/// </summary>
 public static class BossHelper
 {
-    /// <summary>
-    /// Maps boss NPC IDs to their bitmask values.
-    /// </summary>
-    public static readonly Dictionary<int, int> BossMasks = new()
+    public static readonly Dictionary<int, int> BossToPrimary = new()
     {
-        { NPCID.KingSlime, 1 << 0 },
-        { NPCID.EyeofCthulhu, 1 << 1 },
-        { NPCID.EaterofWorldsHead, 1 << 2 },
-        { NPCID.EaterofWorldsBody, 1 << 2 },
-        { NPCID.EaterofWorldsTail, 1 << 2 },
-        { NPCID.BrainofCthulhu, 1 << 3 },
-        { NPCID.QueenBee, 1 << 4 },
-        { NPCID.SkeletronHead, 1 << 5 },
-        { NPCID.Deerclops, 1 << 6 },
-        { NPCID.WallofFlesh, 1 << 7 },
-        { NPCID.QueenSlimeBoss, 1 << 8 },
-        { NPCID.TheDestroyer, 1 << 9 },
-        { NPCID.Retinazer, 1 << 10 },
-        { NPCID.Spazmatism, 1 << 10 },
-        { NPCID.SkeletronPrime, 1 << 11 },
-        { NPCID.Plantera, 1 << 12 },
-        { NPCID.Golem, 1 << 13 },
-        { NPCID.DukeFishron, 1 << 14 },
-        { NPCID.HallowBoss, 1 << 15 },
-        { NPCID.CultistBoss, 1 << 16 },
-        { NPCID.DD2Betsy, 1 << 17 },
-        { NPCID.MoonLordCore, 1 << 18 }
+        { NPCID.KingSlime, NPCID.KingSlime },
+        { NPCID.EyeofCthulhu, NPCID.EyeofCthulhu },
+        { NPCID.EaterofWorldsHead, NPCID.EaterofWorldsHead },
+        { NPCID.EaterofWorldsBody, NPCID.EaterofWorldsHead },
+        { NPCID.EaterofWorldsTail, NPCID.EaterofWorldsHead },
+        { NPCID.BrainofCthulhu, NPCID.BrainofCthulhu },
+        { NPCID.QueenBee, NPCID.QueenBee },
+        { NPCID.SkeletronHead, NPCID.SkeletronHead },
+        { NPCID.Deerclops, NPCID.Deerclops },
+        { NPCID.WallofFlesh, NPCID.WallofFlesh },
+        { NPCID.QueenSlimeBoss, NPCID.QueenSlimeBoss },
+        { NPCID.TheDestroyer, NPCID.TheDestroyer },
+        { NPCID.Retinazer, NPCID.Retinazer },
+        { NPCID.Spazmatism, NPCID.Retinazer },
+        { NPCID.SkeletronPrime, NPCID.SkeletronPrime },
+        { NPCID.Plantera, NPCID.Plantera },
+        { NPCID.Golem, NPCID.Golem },
+        { NPCID.DukeFishron, NPCID.DukeFishron },
+        { NPCID.HallowBoss, NPCID.HallowBoss },
+        { NPCID.CultistBoss, NPCID.CultistBoss },
+        { NPCID.DD2Betsy, NPCID.DD2Betsy },
+        { NPCID.MoonLordCore, NPCID.MoonLordCore }
     };
 
-    /// <summary>
-    /// Maps configuration keys to boss NPC IDs.
-    /// </summary>
-    public static readonly Dictionary<string, int[]> ConfigKeyToBossIds = new()
+    public static readonly Dictionary<string, int> ConfigKeyToBossId = new()
     {
-        { "KingSlime", new[] { (int)NPCID.KingSlime } },
-        { "EyeOfCthulhu", new[] { (int)NPCID.EyeofCthulhu } },
-        { "EaterOfWorlds", new[] { (int)NPCID.EaterofWorldsHead } },
-        { "BrainOfCthulhu", new[] { (int)NPCID.BrainofCthulhu } },
-        { "QueenBee", new[] { (int)NPCID.QueenBee } },
-        { "Skeletron", new[] { (int)NPCID.SkeletronHead } },
-        { "Deerclops", new[] { (int)NPCID.Deerclops } },
-        { "WallOfFlesh", new[] { (int)NPCID.WallofFlesh } },
-        { "QueenSlime", new[] { (int)NPCID.QueenSlimeBoss } },
-        { "TheDestroyer", new[] { (int)NPCID.TheDestroyer } },
-        { "TheTwins", new[] { (int)NPCID.Retinazer, (int)NPCID.Spazmatism } },
-        { "SkeletronPrime", new[] { (int)NPCID.SkeletronPrime } },
-        { "Plantera", new[] { (int)NPCID.Plantera } },
-        { "Golem", new[] { (int)NPCID.Golem } },
-        { "DukeFishron", new[] { (int)NPCID.DukeFishron } },
-        { "EmpressOfLight", new[] { (int)NPCID.HallowBoss } },
-        { "LunaticCultist", new[] { (int)NPCID.CultistBoss } },
-        { "Betsy", new[] { (int)NPCID.DD2Betsy } },
-        { "MoonLord", new[] { (int)NPCID.MoonLordCore } }
+        { "KingSlime", NPCID.KingSlime },
+        { "EyeOfCthulhu", NPCID.EyeofCthulhu },
+        { "EaterOfWorlds", NPCID.EaterofWorldsHead },
+        { "BrainOfCthulhu", NPCID.BrainofCthulhu },
+        { "QueenBee", NPCID.QueenBee },
+        { "Skeletron", NPCID.SkeletronHead },
+        { "Deerclops", NPCID.Deerclops },
+        { "WallOfFlesh", NPCID.WallofFlesh },
+        { "QueenSlime", NPCID.QueenSlimeBoss },
+        { "TheDestroyer", NPCID.TheDestroyer },
+        { "TheTwins", NPCID.Retinazer },
+        { "SkeletronPrime", NPCID.SkeletronPrime },
+        { "Plantera", NPCID.Plantera },
+        { "Golem", NPCID.Golem },
+        { "DukeFishron", NPCID.DukeFishron },
+        { "EmpressOfLight", NPCID.HallowBoss },
+        { "LunaticCultist", NPCID.CultistBoss },
+        { "Betsy", NPCID.DD2Betsy },
+        { "MoonLord", NPCID.MoonLordCore }
     };
 
-    public static int AddBossToMask(int mask, int npcType)
+    public static readonly Dictionary<int, string> BossIdToName = new()
     {
-        if (BossMasks.TryGetValue(npcType, out var bossMask))
-            return mask | bossMask;
-        return mask;
+        { NPCID.KingSlime, "King Slime" },
+        { NPCID.EyeofCthulhu, "Eye of Cthulhu" },
+        { NPCID.EaterofWorldsHead, "Eater of Worlds" },
+        { NPCID.BrainofCthulhu, "Brain of Cthulhu" },
+        { NPCID.QueenBee, "Queen Bee" },
+        { NPCID.SkeletronHead, "Skeletron" },
+        { NPCID.Deerclops, "Deerclops" },
+        { NPCID.WallofFlesh, "Wall of Flesh" },
+        { NPCID.QueenSlimeBoss, "Queen Slime" },
+        { NPCID.TheDestroyer, "The Destroyer" },
+        { NPCID.Retinazer, "The Twins" },
+        { NPCID.SkeletronPrime, "Skeletron Prime" },
+        { NPCID.Plantera, "Plantera" },
+        { NPCID.Golem, "Golem" },
+        { NPCID.DukeFishron, "Duke Fishron" },
+        { NPCID.HallowBoss, "Empress of Light" },
+        { NPCID.CultistBoss, "Lunatic Cultist" },
+        { NPCID.DD2Betsy, "Betsy" },
+        { NPCID.MoonLordCore, "Moon Lord" }
+    };
+
+    public static int GetPrimaryBossId(int npcType)
+    {
+        return BossToPrimary.TryGetValue(npcType, out var primary) ? primary : 0;
     }
 
-    public static bool HasClaimedBoss(int mask, int npcType)
+    public static string GetBossName(int bossId)
     {
-        if (BossMasks.TryGetValue(npcType, out var bossMask))
-            return (mask & bossMask) == bossMask;
-        return false;
+        return BossIdToName.TryGetValue(bossId, out var name) ? name : $"Unknown ({bossId})";
     }
 
-    public static int GetBossMask(int npcType)
+    public static int GetUnclaimedCount(int bossId, Dictionary<int, int> participated)
     {
-        return BossMasks.TryGetValue(npcType, out var mask) ? mask : 0;
+        int totalKills = Bagger.Config.BossKillCounts.TryGetValue(bossId, out var total) ? total : 0;
+        int participatedKills = participated.TryGetValue(bossId, out var p) ? p : 0;
+        return Math.Max(0, totalKills - participatedKills);
     }
 }

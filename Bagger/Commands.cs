@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Terraria;
 using Terraria.ID;
 using TShockAPI;
 
@@ -14,12 +13,11 @@ internal static class Commands
         switch (subcmd)
         {
             case "list":
-                ListDefeatedBosses(args.Player);
+                ListUnclaimedBosses(args.Player);
                 break;
             case "reset":
                 ResetProgress(args.Player);
                 break;
-            case "all":
             case "claim":
                 ClaimAllBags(args.Player);
                 break;
@@ -35,9 +33,9 @@ internal static class Commands
     private static void ShowHelp(TSPlayer player)
     {
         player.SendMessage("[Bagger] Commands:", Color.GreenYellow);
-        player.SendInfoMessage("/bag list - View defeated bosses");
-        player.SendInfoMessage("/bag all - Claim all available boss bags");
-        player.SendInfoMessage("/bag status - View your claim status");
+        player.SendInfoMessage("/bag list - View unclaimed boss bags");
+        player.SendInfoMessage("/bag claim - Claim all available boss bags");
+        player.SendInfoMessage("/bag status - View your detailed status");
         
         if (player.HasPermission("bagger.admin"))
         {
@@ -45,64 +43,70 @@ internal static class Commands
         }
     }
 
-    private static void ListDefeatedBosses(TSPlayer player)
+    private static void ListUnclaimedBosses(TSPlayer player)
     {
-        if (Bagger.Config.DownedBosses.Count == 0)
+        var participated = Bagger.DB.GetParticipatedCounts(player.Name);
+        var unclaimed = new List<string>();
+
+        foreach (var (bossId, _) in Bagger.Config.BossKillCounts)
         {
-            player.SendWarningMessage("[Bagger] No bosses have been defeated yet.");
+            int unclaimedCount = BossHelper.GetUnclaimedCount(bossId, participated);
+            if (unclaimedCount > 0)
+            {
+                string bossName = BossHelper.GetBossName(bossId);
+                unclaimed.Add($"{bossName} ({unclaimedCount})");
+            }
+        }
+
+        if (unclaimed.Count == 0)
+        {
+            player.SendSuccessMessage("[Bagger] You have no unclaimed boss bags.");
             return;
         }
 
-        var bossNames = Bagger.Config.DownedBosses
-            .Select(id => TShock.Utils.GetNPCById(id)?.FullName ?? $"Unknown ({id})")
-            .Distinct();
-
-        player.SendInfoMessage("[Bagger] Defeated Bosses:");
-        player.SendSuccessMessage(string.Join(", ", bossNames));
+        player.SendInfoMessage("[Bagger] Unclaimed Boss Bags:");
+        player.SendSuccessMessage(string.Join(", ", unclaimed));
     }
 
     private static void ShowStatus(TSPlayer player)
     {
-        if (!Bagger.DB.IsPlayerInDb(player.Name))
+        var participated = Bagger.DB.GetParticipatedCounts(player.Name);
+        var participatedList = new List<string>();
+        var unclaimedList = new List<string>();
+
+        foreach (var (bossId, totalKills) in Bagger.Config.BossKillCounts)
         {
-            player.SendInfoMessage("[Bagger] You have not claimed any boss bags yet.");
-            player.SendInfoMessage($"Available to claim: {GetUnclaimedBossCount(0)} boss(es)");
-            return;
-        }
+            string bossName = BossHelper.GetBossName(bossId);
+            int participatedCount = participated.TryGetValue(bossId, out var p) ? p : 0;
+            int unclaimedCount = Math.Max(0, totalKills - participatedCount);
 
-        var mask = Bagger.DB.GetClaimedBossMask(player.Name);
-        var claimed = new List<string>();
-        var available = new List<string>();
+            if (participatedCount > 0)
+            {
+                participatedList.Add($"{bossName} ({participatedCount})");
+            }
 
-        foreach (var (configKey, bossIds) in BossHelper.ConfigKeyToBossIds)
-        {
-            var primaryBossId = bossIds[0];
-            var bossName = TShock.Utils.GetNPCById(primaryBossId)?.FullName ?? configKey;
-
-            if (!Bagger.Config.DownedBosses.Intersect(bossIds).Any())
-                continue;
-
-            if (BossHelper.HasClaimedBoss(mask, primaryBossId))
-                claimed.Add(bossName);
-            else
-                available.Add(bossName);
+            if (unclaimedCount > 0)
+            {
+                unclaimedList.Add($"{bossName} ({unclaimedCount})");
+            }
         }
 
         player.SendInfoMessage("[Bagger] Your Status:");
-        
-        if (claimed.Count > 0)
-            player.SendMessage($"[c/FF5F59:Claimed/Participated:] {string.Join(", ", claimed)}", Color.White);
-        
-        if (available.Count > 0)
-            player.SendMessage($"[c/7CFC00:Available to claim:] {string.Join(", ", available)}", Color.White);
+
+        if (participatedList.Count > 0)
+            player.SendMessage($"[c/FF5F59:Participated:] {string.Join(", ", participatedList)}", Color.White);
         else
-            player.SendSuccessMessage("You have claimed all available boss bags!");
+            player.SendMessage("[c/FF5F59:Participated:] None", Color.White);
+
+        if (unclaimedList.Count > 0)
+            player.SendMessage($"[c/7CFC00:Unclaimed:] {string.Join(", ", unclaimedList)}", Color.White);
+        else
+            player.SendMessage("[c/7CFC00:Unclaimed:] None", Color.White);
     }
 
     private static int GetFreeInventorySlots(TSPlayer player)
     {
         int freeSlots = 0;
-        // Main inventory slots 0-49 (excluding hotbar would be 10-49, but we include all main inventory)
         for (int i = 0; i < 50; i++)
         {
             var item = player.TPlayer.inventory[i];
@@ -116,79 +120,54 @@ internal static class Commands
 
     private static void ClaimAllBags(TSPlayer player)
     {
-        if (Bagger.Config.DownedBosses.Count == 0)
-        {
-            player.SendWarningMessage("[Bagger] No bosses have been defeated yet.");
-            return;
-        }
-
-        var mask = Bagger.DB.IsPlayerInDb(player.Name) 
-            ? Bagger.DB.GetClaimedBossMask(player.Name) 
-            : 0;
-
+        var participated = Bagger.DB.GetParticipatedCounts(player.Name);
         var config = Bagger.Config;
 
-        var bossRewards = new Dictionary<string, (int[] bossIds, List<Configuration.ItemData> items)>
+        var bossRewards = new Dictionary<int, List<Configuration.ItemData>>
         {
-            { "King Slime", (new[] { (int)NPCID.KingSlime }, config.KingSlimeDrop) },
-            { "Eye of Cthulhu", (new[] { (int)NPCID.EyeofCthulhu }, config.EyeOfCthulhuDrop) },
-            { "Eater of Worlds", (new[] { (int)NPCID.EaterofWorldsHead }, config.EaterOfWorldsDrop) },
-            { "Brain of Cthulhu", (new[] { (int)NPCID.BrainofCthulhu }, config.BrainOfCthulhuDrop) },
-            { "Queen Bee", (new[] { (int)NPCID.QueenBee }, config.QueenBeeDrop) },
-            { "Skeletron", (new[] { (int)NPCID.SkeletronHead }, config.SkeletronDrop) },
-            { "Deerclops", (new[] { (int)NPCID.Deerclops }, config.DeerclopsDrop) },
-            { "Wall of Flesh", (new[] { (int)NPCID.WallofFlesh }, config.WallOfFleshDrop) },
-            { "Queen Slime", (new[] { (int)NPCID.QueenSlimeBoss }, config.QueenSlimeDrop) },
-            { "The Destroyer", (new[] { (int)NPCID.TheDestroyer }, config.TheDestroyerDrop) },
-            { "The Twins", (new[] { (int)NPCID.Retinazer, (int)NPCID.Spazmatism }, config.TheTwinsDrop) },
-            { "Skeletron Prime", (new[] { (int)NPCID.SkeletronPrime }, config.SkeletronPrimeDrop) },
-            { "Plantera", (new[] { (int)NPCID.Plantera }, config.PlanteraDrop) },
-            { "Golem", (new[] { (int)NPCID.Golem }, config.GolemDrop) },
-            { "Duke Fishron", (new[] { (int)NPCID.DukeFishron }, config.DukeFishronDrop) },
-            { "Empress of Light", (new[] { (int)NPCID.HallowBoss }, config.EmpressOfLightDrop) },
-            { "Lunatic Cultist", (new[] { (int)NPCID.CultistBoss }, config.LunaticCultistDrop) },
-            { "Betsy", (new[] { (int)NPCID.DD2Betsy }, config.BetsyDrop) },
-            { "Moon Lord", (new[] { (int)NPCID.MoonLordCore }, config.MoonLordDrop) }
+            { NPCID.KingSlime, config.KingSlimeDrop },
+            { NPCID.EyeofCthulhu, config.EyeOfCthulhuDrop },
+            { NPCID.EaterofWorldsHead, config.EaterOfWorldsDrop },
+            { NPCID.BrainofCthulhu, config.BrainOfCthulhuDrop },
+            { NPCID.QueenBee, config.QueenBeeDrop },
+            { NPCID.SkeletronHead, config.SkeletronDrop },
+            { NPCID.Deerclops, config.DeerclopsDrop },
+            { NPCID.WallofFlesh, config.WallOfFleshDrop },
+            { NPCID.QueenSlimeBoss, config.QueenSlimeDrop },
+            { NPCID.TheDestroyer, config.TheDestroyerDrop },
+            { NPCID.Retinazer, config.TheTwinsDrop },
+            { NPCID.SkeletronPrime, config.SkeletronPrimeDrop },
+            { NPCID.Plantera, config.PlanteraDrop },
+            { NPCID.Golem, config.GolemDrop },
+            { NPCID.DukeFishron, config.DukeFishronDrop },
+            { NPCID.HallowBoss, config.EmpressOfLightDrop },
+            { NPCID.CultistBoss, config.LunaticCultistDrop },
+            { NPCID.DD2Betsy, config.BetsyDrop },
+            { NPCID.MoonLordCore, config.MoonLordDrop }
         };
 
-        // First pass: determine what can be claimed and count required slots
-        var toClaim = new List<(string bossName, int bossMask, List<Configuration.ItemData> items)>();
+        var toClaim = new List<(int bossId, int count, List<Configuration.ItemData> items)>();
         int totalItemSlots = 0;
 
-        foreach (var (bossName, (bossIds, items)) in bossRewards)
+        foreach (var (bossId, items) in bossRewards)
         {
-            var primaryBossId = bossIds[0];
-            var bossMask = BossHelper.GetBossMask(primaryBossId);
-
-            // Skip if already claimed
-            if ((mask & bossMask) == bossMask)
-                continue;
-
-            // Check if boss is defeated
-            var isDefeated = bossIds.Length > 1 
-                ? bossIds.All(id => config.DownedBosses.Contains(id))
-                : config.DownedBosses.Contains(primaryBossId);
-
-            if (!isDefeated)
-                continue;
-
-            // Skip if no items configured
             if (items == null || items.Count == 0)
                 continue;
 
-            toClaim.Add((bossName, bossMask, items));
-            totalItemSlots += items.Count;
+            int unclaimedCount = BossHelper.GetUnclaimedCount(bossId, participated);
+            if (unclaimedCount <= 0)
+                continue;
+
+            toClaim.Add((bossId, unclaimedCount, items));
+            totalItemSlots += items.Count * unclaimedCount;
         }
 
-        // Check if there's anything to claim
         if (toClaim.Count == 0)
         {
-            player.SendWarningMessage("[Bagger] No new boss bags available to claim.");
-            player.SendInfoMessage("You may have already claimed them or participated in the fights.");
+            player.SendWarningMessage("[Bagger] No boss bags available to claim.");
             return;
         }
 
-        // Check inventory space
         int freeSlots = GetFreeInventorySlots(player);
         if (freeSlots < totalItemSlots)
         {
@@ -198,28 +177,30 @@ internal static class Commands
             return;
         }
 
-        // Second pass: actually give items
-        var claimedCount = 0;
-        foreach (var (bossName, bossMask, items) in toClaim)
+        int totalBagsClaimed = 0;
+
+        foreach (var (bossId, count, items) in toClaim)
         {
-            foreach (var item in items)
+            for (int i = 0; i < count; i++)
             {
-                player.GiveItem(item.ID, item.Stack);
+                foreach (var item in items)
+                {
+                    player.GiveItem(item.ID, item.Stack);
+                }
             }
 
-            mask |= bossMask;
-            claimedCount++;
+            if (!participated.ContainsKey(bossId))
+                participated[bossId] = 0;
             
-            player.SendSuccessMessage($"[Bagger] Claimed {bossName} rewards!");
+            participated[bossId] += count;
+            totalBagsClaimed += count;
+
+            string bossName = BossHelper.GetBossName(bossId);
+            player.SendSuccessMessage($"[Bagger] Claimed {bossName} x{count}!");
         }
 
-        // Save to database
-        if (Bagger.DB.IsPlayerInDb(player.Name))
-            Bagger.DB.SavePlayer(player.Name, mask);
-        else
-            Bagger.DB.InsertPlayer(player.Name, mask);
-
-        player.SendSuccessMessage($"[Bagger] Successfully claimed {claimedCount} boss bag(s)!");
+        Bagger.DB.SavePlayer(player.Name, participated);
+        player.SendSuccessMessage($"[Bagger] Successfully claimed {totalBagsClaimed} boss bag(s)!");
     }
 
     private static void ResetProgress(TSPlayer player)
@@ -232,7 +213,7 @@ internal static class Commands
 
         if (Bagger.DB.ClearData())
         {
-            Bagger.Config.DownedBosses.Clear();
+            Bagger.Config.BossKillCounts.Clear();
             Bagger.Config.Save();
             player.SendSuccessMessage("[Bagger] All progress has been reset.");
         }
@@ -240,20 +221,5 @@ internal static class Commands
         {
             player.SendErrorMessage("[Bagger] Failed to reset progress.");
         }
-    }
-
-    private static int GetUnclaimedBossCount(int mask)
-    {
-        var count = 0;
-        foreach (var (_, bossIds) in BossHelper.ConfigKeyToBossIds)
-        {
-            var primaryBossId = bossIds[0];
-            if (Bagger.Config.DownedBosses.Contains(primaryBossId) && 
-                !BossHelper.HasClaimedBoss(mask, primaryBossId))
-            {
-                count++;
-            }
-        }
-        return count;
     }
 }

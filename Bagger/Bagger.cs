@@ -12,7 +12,7 @@ public class Bagger : TerrariaPlugin
 {
     public override string Name => "Bagger";
     public override string Author => "Neoslyke, Soofa, 羽学";
-    public override Version Version => new(2, 1, 0);
+    public override Version Version => new(2, 2, 0);
     public override string Description => "Allows players who missed boss fights to claim boss bags.";
 
     internal static Database DB = null!;
@@ -87,9 +87,9 @@ public class Bagger : TerrariaPlugin
 
         foreach (var (npcId, isDefeated) in bossChecks)
         {
-            if (isDefeated && IsBestiaryUnlocked(npcId) && !Config.DownedBosses.Contains(npcId))
+            if (isDefeated && IsBestiaryUnlocked(npcId) && !Config.BossKillCounts.ContainsKey(npcId))
             {
-                Config.DownedBosses.Add(npcId);
+                Config.BossKillCounts[npcId] = 1;
             }
         }
     }
@@ -98,30 +98,29 @@ public class Bagger : TerrariaPlugin
     {
         var npc = args.npc;
         
-        if (!npc.boss || Config.DownedBosses.Contains(npc.type) || !IsBestiaryUnlocked(npc.type))
+        if (!npc.boss || !IsBestiaryUnlocked(npc.type))
             return;
 
-        Config.DownedBosses.Add(npc.type);
+        int bossType = BossHelper.GetPrimaryBossId(npc.type);
         
-        if (npc.type == NPCID.Retinazer && !Config.DownedBosses.Contains(NPCID.Spazmatism))
-            Config.DownedBosses.Add(NPCID.Spazmatism);
-        else if (npc.type == NPCID.Spazmatism && !Config.DownedBosses.Contains(NPCID.Retinazer))
-            Config.DownedBosses.Add(NPCID.Retinazer);
+        if (bossType == 0)
+            return;
 
+        if (!Config.BossKillCounts.ContainsKey(bossType))
+            Config.BossKillCounts[bossType] = 0;
+        
+        Config.BossKillCounts[bossType]++;
         Config.Save();
 
         foreach (var player in TShock.Players.Where(p => p?.Active == true))
         {
-            var mask = DB.IsPlayerInDb(player.Name) 
-                ? DB.GetClaimedBossMask(player.Name) 
-                : 0;
+            var participated = DB.GetParticipatedCounts(player.Name);
             
-            mask = BossHelper.AddBossToMask(mask, npc.type);
+            if (!participated.ContainsKey(bossType))
+                participated[bossType] = 0;
             
-            if (DB.IsPlayerInDb(player.Name))
-                DB.SavePlayer(player.Name, mask);
-            else
-                DB.InsertPlayer(player.Name, mask);
+            participated[bossType]++;
+            DB.SavePlayer(player.Name, participated);
         }
     }
 

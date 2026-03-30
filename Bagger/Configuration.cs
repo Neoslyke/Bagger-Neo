@@ -8,8 +8,8 @@ public class Configuration
 {
     private static readonly string ConfigPath = Path.Combine(TShock.SavePath, "Bagger.json");
 
-    [JsonProperty("DownedBosses")]
-    public List<int> DownedBosses { get; set; } = new();
+    [JsonProperty("BossKillCounts")]
+    public Dictionary<int, int> BossKillCounts { get; set; } = new();
 
     [JsonProperty("KingSlime")]
     public List<ItemData> KingSlimeDrop { get; set; } = new();
